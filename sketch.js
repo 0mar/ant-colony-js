@@ -1,17 +1,17 @@
-let antennae;
+let scene;
 
 function setup() {
-  createCanvas(1600, 1000);
-  system = new ParticleSystem(createVector(width / 2, 50));
+  createCanvas(800, 800);
+  scene = new Scene();
+  background(51);
 }
 
 function draw() {
-  background(51);
-  system.addParticle();
-  system.run();
+
+  scene.run();
 }
 
-function dist(pos1, pos2) {
+function distance(pos1, pos2) {
   let del_x = pos1[0] - pos2[0];
   let del_y = pos1[1] - pos2[1];
   return del_x * del_x + del_y * del_y;
@@ -35,16 +35,17 @@ class Scene {
     this.time = 0;
     this.counter = 0;
     this.total_ants = 0;
-    this.params = Parameters();
+    this.params = new Parameters();
     this.nest_node = null;
     this.food_nodes = [];
-    this.graph = this.new_graph();
+    this.graph = this.test_graph();
     this.ants = [];
+    this.create_colony();
   }
 
   create_colony() {
     for (let i = 0; i < this.params.num_ants; i++) {
-      ant = Ant(this);
+      let ant = new Ant(this);
       this.ants.push(ant);
     }
   }
@@ -54,7 +55,39 @@ class Scene {
       ant.walk(this.params.dt);
     }
     for (let edge of this.graph.edges) {
-      edge.pheromone *= Math.pow((1-this.params.pheromone_decay),self.params.dt);
+      edge.pheromone *= Math.pow((1 - this.params.pheromone_decay), this.params.dt);
+    }
+  }
+
+  test_graph() {
+    let num_els = 4;
+    let positions = [[width / 2, 10], [10, height / 2], [width - 10, height / 2], [width / 2, height - 10]]
+    let graph = new Graph();
+    let node_list = []; // I don't like this.
+    for (let i = 0; i < num_els; i++) {
+      let node = new Node(positions[i]);
+      node_list.push(node);
+      graph.add_node(node);
+      for (let j = 0; j < i; j++) {
+        graph.add_edge(node, node_list[j]);
+      }
+    }
+    graph.remove_edge(Array.from(graph.edges)[0]);
+    return graph;
+  }
+
+  run() {
+    while (this.time < 1) {
+      this.time += this.params.dt;
+      this.move();
+      this.display()
+    }
+  }
+
+  display() {
+    this.graph.display();
+    for (let ant of this.ants) {
+      ant.display();
     }
   }
 }
@@ -62,28 +95,18 @@ class Scene {
 class Node {
   constructor(position) {
     this.position = position;
-    this.edges = [];
+    this.edges = new Set();
   }
 
   has_edge(edge) {
-    return edges.indexOf(edge) >= 0;
+    return this.edges.has(edge);
   }
 
-  connect(node) {
-    if (!this.has_edge(node)) {
-      this.edges.push()
-    } else {
-      console.log("Edge already exists!");
-    }
-  }
-
-  disconnect(node) {
-    let index = this.edges.indexOf(node);
-    if (index >= 0) {
-      this.edges.splice(index, 1);
-    } else {
-      console.log("Node is not connected!");
-    }
+  display() {
+    stroke(200);
+    strokeWeight(2);
+    fill(100);
+    ellipse(this.position[0], this.position[1], 20, 20);
   }
 }
 
@@ -91,7 +114,9 @@ class Edge {
   constructor(node1, node2) {
     this.node1 = node1;
     this.node2 = node2;
-    this.weight = dist(node1.position, node2.position);
+    node1.edges.add(this);
+    node2.edges.add(this);
+    this.weight = distance(node1.position, node2.position);
     this.pheromone = 0.1;
     this.del_x = node2[0] - node1[0];
     this.del_y = node2[1] - node1[1];
@@ -117,8 +142,57 @@ class Edge {
     }
     return [start_node.position[0] + ratio * this.del_x, start_node.position[1] + ratio * this.del_y];
   }
+
+  display() {
+    line(this.node1.position[0], this.node1.position[1], this.node2.position[0], this.node2.position[1]);
+  }
 }
-// An Ant class
+
+class Graph {
+  constructor() {
+    this.nodes = new Set();
+    this.edges = new Set();
+  }
+
+  add_node(node) {
+    this.nodes.add(node);
+  }
+
+  remove_node(node) {
+    this.nodes.delete(node);
+  }
+
+  add_edge(node1, node2) {
+    let edge_exists_already = false;
+    for (let edge of node1.edges) {
+      edge_exists_already |= edge.other_node(node2);
+    }
+    if (edge_exists_already) {
+      console.log("Edge cannot be added, it already exists");
+    }
+    let edge = new Edge(node1, node2);
+    this.edges.add(edge);
+  }
+
+  remove_edge(edge) {
+    if (this.edges.has(edge)) {
+      this.edges.delete(edge);
+      edge.node1.edges.delete(edge);
+      edge.node2.edges.delete(edge);
+    } else {
+      console.log("Edge not present, can't be removed!");
+    }
+  }
+
+  display() {
+    for (let node of this.nodes) {
+      node.display();
+    }
+    for (let edge of this.edges) {
+      edge.display();
+    }
+  }
+}
 
 class Ant {
   constructor(scene) {
@@ -129,9 +203,9 @@ class Ant {
     this.edge = null;
     this.to_node = scene.nest_node;
     this.progress_on_edge = 0;
-    this.has_food = True;
+    this.has_food = true;
     this.radius = 12
-    this.back_trace = True;
+    this.back_trace = true;
     this.pick_new_edge();
   }
 
@@ -156,12 +230,12 @@ class Ant {
     }
     if (this.progress >= 1) {
       if (this.at_food() && !this.has_food) {
-        this.has_food = True;
-        this.is_back_tracing = True;
+        this.has_food = true;
+        this.is_back_tracing = true;
         this.back_trace_list.append(this.from_node);
       } else if (this.at_nest && this.has_food) {
-        this.has_food = False;
-        this.is_back_tracing = False;
+        this.has_food = false;
+        this.is_back_tracing = false;
         this.back_trace_list = [this.scene.nest_node];
       }
       this.pick_new_edge();
