@@ -3,26 +3,25 @@ let scene;
 function setup() {
   createCanvas(800, 800);
   scene = new Scene();
-  background(51);
 }
 
 function draw() {
-
+  background(51);
   scene.run();
 }
 
 function distance(pos1, pos2) {
   let del_x = pos1[0] - pos2[0];
   let del_y = pos1[1] - pos2[1];
-  return del_x * del_x + del_y * del_y;
+  return Math.sqrt(del_x * del_x + del_y * del_y);
 }
 
 class Parameters {
   constructor() {
-    this.num_ants = 0;
+    this.num_ants = 1;
     this.num_nodes = 5;
     this.ant_size = 12;
-    this.ant_speed = 1;
+    this.ant_speed = 10;
     this.pheromone_decay = 0.8;
     this.pheromone_deposit = 3;
     this.time_delay = 10;
@@ -34,7 +33,6 @@ class Scene {
   constructor() {
     this.time = 0;
     this.counter = 0;
-    this.total_ants = 0;
     this.params = new Parameters();
     this.nest_node = null;
     this.food_nodes = [];
@@ -73,14 +71,16 @@ class Scene {
       }
     }
     graph.remove_edge(Array.from(graph.edges)[0]);
+    this.nest_node = Array.from(graph.nodes)[0];
+    this.food_nodes = [Array.from(graph.nodes)[1]];
     return graph;
   }
 
   run() {
-    while (this.time < 1) {
+    while (this.time < 100) {
       this.time += this.params.dt;
       this.move();
-      this.display()
+      this.display();
     }
   }
 
@@ -102,11 +102,20 @@ class Node {
     return this.edges.has(edge);
   }
 
+  find_edge(other_node) {
+    for (let edge of this.edges) {
+      if (edge.other_node(this) === other_node) {
+        return edge;
+      }
+    }
+    console.log("Edge not found!");
+  }
+
   display() {
     stroke(200);
     strokeWeight(2);
     fill(100);
-    ellipse(this.position[0], this.position[1], 20, 20);
+    ellipse(this.position[0], this.position[1], 50, 50);
   }
 }
 
@@ -118,14 +127,14 @@ class Edge {
     node2.edges.add(this);
     this.weight = distance(node1.position, node2.position);
     this.pheromone = 0.1;
-    this.del_x = node2[0] - node1[0];
-    this.del_y = node2[1] - node1[1];
+    this.del_x = node2.position[0] - node1.position[0];
+    this.del_y = node2.position[1] - node1.position[1];
   }
 
   other_node(node) {
-    if (this.node1 == node) {
+    if (this.node1 === node) {
       return this.node2;
-    } else if (this.node2 == node) {
+    } else if (this.node2 === node) {
       return this.node1;
     } else {
       return null;
@@ -135,9 +144,9 @@ class Edge {
 
   get_position(start_node, progress) {
     let ratio = progress;
-    if (this.node1 == start_node) {
+    if (this.node2 === start_node) {
       ratio = 1 - progress;
-    } else if (this.node2 != start_node) {
+    } else if (this.node1 != start_node) {
       console.log("Start node is not connected to edge");
     }
     return [start_node.position[0] + ratio * this.del_x, start_node.position[1] + ratio * this.del_y];
@@ -217,14 +226,14 @@ class Ant {
     stroke(200);
     strokeWeight(2);
     fill(color);
-    let position = this.position();
+    let position = this.get_position();
     ellipse(position[0], position[1], this.radius, this.radius);
   }
 
   walk(dt) {
-    let progress = dt * this.scene.params.speed;
+    let progress = dt * this.scene.params.ant_speed;
     this.progress_on_edge += progress / this.edge.weight;
-    this.position = this.position();
+    this.position = this.get_position();
     if (this.has_food) {
       this.deposit_pheromone();
     }
@@ -242,7 +251,7 @@ class Ant {
     }
   }
 
-  position() {
+  get_position() {
     return this.edge.get_position(this.from_node, this.progress_on_edge);
   }
 
@@ -261,31 +270,33 @@ class Ant {
       this.to_node = this.back_trace_list[this.back_trace_list.length - 1];
       let first_occurence = this.back_trace_list.indexOf(this.to_node);
       this.back_trace_list = this.back_trace_list.slice(0, first_occurence);
+      this.edge = this.to_node.find_edge(this.from_node);
     } else {
-      let edges = this.from_node.edges.copy();
+      let edges = Array.from(this.from_node.edges);
       if (edges.length > 1 && !(this.at_food() || this.at_nest())) {
         for (let i = 0; i < this.from_node.edges.length; i++) {
-          if (edges[i].other_node(this.from_node) == prev_node) {
+          if (edges[i].other_node(this.from_node) === prev_node) {
             edges.splice(i, 1); // Todo: Move removal to zero pheromone below.
           }
         }
       }
       let arbitraryness = 0.0; // Todo: Move to scene // Todo: Check what happens if positive
-      let total_pheromone = edges.reduce((a, b) => a.pheromone + b.pheromone, 0) + arbitraryness;
+      let total_pheromone = Array.from(edges).reduce((a, b) => a.pheromone + b.pheromone, 0) + arbitraryness;
       let it = -1;
       let pher_indicator = random(0, total_pheromone);
       do {
         pher_indicator -= edges.pheromone;
-        it++; process_on_edge
+        it++;
       } while (pher_indicator > 0);
-      this.to_node = edges[it].other(prev_node);
+      this.to_node = edges[it].other_node(prev_node);
+      this.edge = edges[it];
     }
-    this.edge = edges[it];
+    this.progress_on_edge = 0;
   }
 
   at_nest() {
     // Assuming a node is reached
-    return this.to_node == this.scene.nest_node;
+    return this.to_node === this.scene.nest_node;
   }
 
   at_food() {
@@ -302,7 +313,7 @@ class Particle {
   constructor(position) {
     this.acceleration = createVector(0, 0.05);
     this.velocity = createVector(random(-1, 1), random(-1, 0));
-    this.position = position.copy();
+    this.position = position.slice();
     this.lifespan = 255;
   }
   run() {
