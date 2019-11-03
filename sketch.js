@@ -7,7 +7,9 @@ function setup() {
 
 function draw() {
   background(51);
-  scene.run();
+  scene.time += scene.params.dt;
+  scene.move();
+  scene.display();
 }
 
 function distance(pos1, pos2) {
@@ -25,7 +27,7 @@ class Parameters {
     this.pheromone_decay = 0.8;
     this.pheromone_deposit = 3;
     this.time_delay = 10;
-    this.dt = 0.003;
+    this.dt = 0.03;
   }
 }
 
@@ -73,16 +75,10 @@ class Scene {
     graph.remove_edge(Array.from(graph.edges)[0]);
     this.nest_node = Array.from(graph.nodes)[0];
     this.food_nodes = [Array.from(graph.nodes)[1]];
+    Array.from(graph.nodes)[1].food = 1; // todo: make nice
     return graph;
   }
 
-  run() {
-    while (this.time < 100) {
-      this.time += this.params.dt;
-      this.move();
-      this.display();
-    }
-  }
 
   display() {
     this.graph.display();
@@ -96,6 +92,7 @@ class Node {
   constructor(position) {
     this.position = position;
     this.edges = new Set();
+    this.food = 0;
   }
 
   has_edge(edge) {
@@ -115,6 +112,9 @@ class Node {
     stroke(200);
     strokeWeight(2);
     fill(100);
+    if (this.food > 0) {
+      fill(100, 10, 10);
+    }
     ellipse(this.position[0], this.position[1], 50, 50);
   }
 }
@@ -137,16 +137,16 @@ class Edge {
     } else if (this.node2 === node) {
       return this.node1;
     } else {
-      return null;
       console.log("Node is not connected to edge");
+      return null;
     }
   }
 
   get_position(start_node, progress) {
     let ratio = progress;
     if (this.node2 === start_node) {
-      ratio = 1 - progress;
-    } else if (this.node1 != start_node) {
+      ratio = - progress;
+    } else if (this.node1 !== start_node) {
       console.log("Start node is not connected to edge");
     }
     return [start_node.position[0] + ratio * this.del_x, start_node.position[1] + ratio * this.del_y];
@@ -174,7 +174,7 @@ class Graph {
   add_edge(node1, node2) {
     let edge_exists_already = false;
     for (let edge of node1.edges) {
-      edge_exists_already |= edge.other_node(node2);
+      edge_exists_already |= edge.other_node(node1) == node2;
     }
     if (edge_exists_already) {
       console.log("Edge cannot be added, it already exists");
@@ -237,7 +237,7 @@ class Ant {
     if (this.has_food) {
       this.deposit_pheromone();
     }
-    if (this.progress >= 1) {
+    if (this.progress_on_edge >= 1) {
       if (this.at_food() && !this.has_food) {
         this.has_food = true;
         this.is_back_tracing = true;
@@ -257,10 +257,11 @@ class Ant {
 
   deposit_pheromone() {
     let addition = this.scene.params.pheromone_deposit * this.scene.params.dt / this.edge.weight;
-    this.edge.weight += addition;
+    this.edge.pheromone += addition;
   }
 
   pick_new_edge() {
+    console.log("Picking new edge");
     let prev_node = this.from_node;
     if (this.back_trace && !this.is_back_tracing) {
       this.back_trace_list.push(prev_node);
