@@ -24,10 +24,11 @@ class Parameters {
     this.num_nodes = 5;
     this.ant_size = 12;
     this.ant_speed = 10;
-    this.pheromone_decay = 0.8;
-    this.pheromone_deposit = 3;
+    this.pheromone_decay = 0.005;
+    this.pheromone_deposit = 100;
     this.time_delay = 10;
-    this.dt = 0.03;
+    this.dt = 0.2;
+    this.arbitraryness = 0.0;
   }
 }
 
@@ -76,6 +77,7 @@ class Scene {
     this.nest_node = Array.from(graph.nodes)[0];
     this.food_nodes = [Array.from(graph.nodes)[1]];
     Array.from(graph.nodes)[1].food = 1; // todo: make nice
+    this.nest_node.is_nest=true;
     return graph;
   }
 
@@ -93,6 +95,7 @@ class Node {
     this.position = position;
     this.edges = new Set();
     this.food = 0;
+    this.is_nest = false;
   }
 
   has_edge(edge) {
@@ -114,6 +117,9 @@ class Node {
     fill(100);
     if (this.food > 0) {
       fill(100, 10, 10);
+    }
+    if (this.is_nest) {
+      fill(30,150,50);
     }
     ellipse(this.position[0], this.position[1], 50, 50);
   }
@@ -142,6 +148,10 @@ class Edge {
     }
   }
 
+  has_node(node) {
+    return this.node1===node || this.node2 === node;
+  }
+
   get_position(start_node, progress) {
     let ratio = progress;
     if (this.node2 === start_node) {
@@ -153,6 +163,7 @@ class Edge {
   }
 
   display() {
+    stroke(127*(2 - this.pheromone));
     line(this.node1.position[0], this.node1.position[1], this.node2.position[0], this.node2.position[1]);
   }
 }
@@ -208,11 +219,11 @@ class Ant {
     this.scene = scene;
     this.is_back_tracing = false;
     this.back_trace_list = [];
-    this.from_node = scene.nest_node;
+    this.from_node = null;
     this.edge = null;
     this.to_node = scene.nest_node;
     this.progress_on_edge = 0;
-    this.has_food = true;
+    this.has_food = false;
     this.radius = 12
     this.back_trace = true;
     this.pick_new_edge();
@@ -241,9 +252,10 @@ class Ant {
       if (this.at_food() && !this.has_food) {
         this.has_food = true;
         this.is_back_tracing = true;
-        this.back_trace_list.append(this.from_node);
-      } else if (this.at_nest && this.has_food) {
+        this.back_trace_list.push(this.from_node);
+      } else if (this.at_nest() && this.has_food) {
         this.has_food = false;
+        console.log("Dropping off food")
         this.is_back_tracing = false;
         this.back_trace_list = [this.scene.nest_node];
       }
@@ -261,7 +273,6 @@ class Ant {
   }
 
   pick_new_edge() {
-    console.log("Picking new edge");
     let prev_node = this.from_node;
     if (this.back_trace && !this.is_back_tracing) {
       this.back_trace_list.push(prev_node);
@@ -272,24 +283,30 @@ class Ant {
       let first_occurence = this.back_trace_list.indexOf(this.to_node);
       this.back_trace_list = this.back_trace_list.slice(0, first_occurence);
       this.edge = this.to_node.find_edge(this.from_node);
-    } else {
-      let edges = Array.from(this.from_node.edges);
-      if (edges.length > 1 && !(this.at_food() || this.at_nest())) {
-        for (let i = 0; i < this.from_node.edges.length; i++) {
-          if (edges[i].other_node(this.from_node) === prev_node) {
-            edges.splice(i, 1); // Todo: Move removal to zero pheromone below.
-          }
+    } else{ 
+      let edges = []; // Not sure if I should stick to sets. Very low indexes anyway.
+      let total_pheromone = 0;
+      for (let edge of this.from_node.edges) { // how do I force error checking?
+        let add_edge = false;
+        if (!edge.has_node(prev_node)) {
+          edges.push(edge);
+        } else if (this.from_node.edges.size==1) {
+          edges.push(edge);
+        } else  if (this.at_nest() || this.at_food()) {
+          edges.push(edge);
+        }
+        if (add_edge) {
+          edges.push(edge);
+          total_pheromone += edge.pheromone;
         }
       }
-      let arbitraryness = 0.0; // Todo: Move to scene // Todo: Check what happens if positive
-      let total_pheromone = Array.from(edges).reduce((a, b) => a.pheromone + b.pheromone, 0) + arbitraryness;
       let it = -1;
       let pher_indicator = random(0, total_pheromone);
       do {
-        pher_indicator -= edges.pheromone;
         it++;
+        pher_indicator -= edges[it].pheromone;
       } while (pher_indicator > 0);
-      this.to_node = edges[it].other_node(prev_node);
+      this.to_node = edges[it].other_node(this.from_node);
       this.edge = edges[it];
     }
     this.progress_on_edge = 0;
