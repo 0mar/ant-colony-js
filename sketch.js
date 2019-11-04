@@ -289,11 +289,11 @@ class Ant {
       for (let edge of this.from_node.edges) { // how do I force error checking?
         let add_edge = false;
         if (!edge.has_node(prev_node)) {
-          edges.push(edge);
+          add_edge = true;
         } else if (this.from_node.edges.size==1) {
-          edges.push(edge);
+          add_edge = true;
         } else  if (this.at_nest() || this.at_food()) {
-          edges.push(edge);
+          add_edge = true;
         }
         if (add_edge) {
           edges.push(edge);
