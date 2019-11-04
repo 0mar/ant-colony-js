@@ -7,7 +7,7 @@ function setup() {
 }
 
 function draw() {
-  background(51);
+  background(200);
   scene.time += scene.params.dt;
   scene.move();
   scene.display();
@@ -21,8 +21,8 @@ function distance(pos1, pos2) {
 
 class Params {
   constructor() {
-    this.num_ants = 20;
-    this.num_vertexs = 50;
+    this.num_ants = 70;
+    this.num_vertices = 150;
     this.ant_size = 12;
     this.ant_speed = 10;
     this.pheromone_decay = 0.0005;
@@ -39,7 +39,7 @@ class Scene {
     this.counter = 0;
     this.params = new Params();
     this.nest_vertex = null;
-    this.food_vertexs = [];
+    this.food_vertices = [];
     this.graph = this.geometric_graph();
     this.ants = [];
     this.create_colony();
@@ -75,9 +75,9 @@ class Scene {
       }
     }
     graph.remove_edge(Array.from(graph.edges)[0]);
-    this.nest_vertex = Array.from(graph.vertexs)[0];
-    this.food_vertexs = [Array.from(graph.vertexs)[1]];
-    Array.from(graph.vertexs)[1].food = 1; // todo: make nice
+    this.nest_vertex = Array.from(graph.vertices)[0];
+    this.food_vertices = [Array.from(graph.vertices)[1]];
+    Array.from(graph.vertices)[1].food = 1; // todo: make nice
     this.nest_vertex.is_nest = true;
     return graph;
   }
@@ -87,8 +87,8 @@ class Scene {
     do {
       graph.clear();
       let vertex_list = [];
-      let max_dist = 125;
-      for (let i = 0; i < this.params.num_vertexs; i++) {
+      let max_dist = 100;
+      for (let i = 0; i < this.params.num_vertices; i++) {
         let vertex = new Vertex([random() * size_x, random() * size_y]);
         graph.add_vertex(vertex);
         vertex_list.push(vertex);
@@ -99,11 +99,11 @@ class Scene {
           }
         }
       }
-      this.nest_vertex = Array.from(graph.vertexs)[0];
-      this.food_vertexs = [Array.from(graph.vertexs)[1]];
-      Array.from(graph.vertexs)[1].food = 1; // todo: make nice
+      this.nest_vertex = Array.from(graph.vertices)[0];
+      this.food_vertices = [Array.from(graph.vertices)[1]];
+      Array.from(graph.vertices)[1].food = 1; // todo: make nice
       this.nest_vertex.is_nest = true;
-    } while (!graph.has_path(this.nest_vertex, this.food_vertexs[0]));
+    } while (!graph.has_path(this.nest_vertex, this.food_vertices[0]));
     return graph;
   }
 
@@ -147,7 +147,7 @@ class Vertex {
     if (this.is_nest) {
       fill(30, 150, 50);
     }
-    ellipse(this.position[0], this.position[1], 50, 50);
+    ellipse(this.position[0], this.position[1], 20, 20);
   }
 }
 
@@ -189,24 +189,24 @@ class Edge {
   }
 
   display() {
-    stroke(127 * (2 - this.pheromone));
+    stroke(127 * (this.pheromone - 2));
     line(this.vertex1.position[0], this.vertex1.position[1], this.vertex2.position[0], this.vertex2.position[1]);
   }
 }
 
 class Graph {
   constructor() {
-    this.vertexs = new Set();
+    this.vertices = new Set();
     this.edges = new Set();
     this.valid = false;
   }
 
   add_vertex(vertex) {
-    this.vertexs.add(vertex);
+    this.vertices.add(vertex);
   }
 
   remove_vertex(vertex) {
-    this.vertexs.delete(vertex);
+    this.vertices.delete(vertex);
   }
 
   add_edge(vertex1, vertex2) {
@@ -232,40 +232,40 @@ class Graph {
   }
 
   has_path(vertex1, vertex2) {
-    let reachable_vertexs = new Set();
-    let unexplored_vertexs = new Set([vertex1]);
-    let explored_vertexs = new Set();
+    let reachable_vertices = new Set();
+    let unexplored_vertices = new Set([vertex1]);
+    let explored_vertices = new Set();
     console.log("Checking paths");
-    while (unexplored_vertexs.size > 0) {
-      let uv_list = Array.from(unexplored_vertexs);
+    while (unexplored_vertices.size > 0) {
+      let uv_list = Array.from(unexplored_vertices);
       for (let vertex of uv_list) {
-        unexplored_vertexs.delete(vertex);
-        explored_vertexs.add(vertex)
+        unexplored_vertices.delete(vertex);
+        explored_vertices.add(vertex)
         for (let edge of vertex.edges) {
           let nb_vertex = edge.other_vertex(vertex);
-          reachable_vertexs.add(nb_vertex);
-          unexplored_vertexs.delete(nb_vertex);
-          if (!explored_vertexs.has(nb_vertex)) {
-            unexplored_vertexs.add(nb_vertex);
+          reachable_vertices.add(nb_vertex);
+          unexplored_vertices.delete(nb_vertex);
+          if (!explored_vertices.has(nb_vertex)) {
+            unexplored_vertices.add(nb_vertex);
           }
 
         }
       }
     }
-    return reachable_vertexs.has(vertex2);
+    return reachable_vertices.has(vertex2);
   }
 
   clear() {
-    this.vertexs.clear();
+    this.vertices.clear();
     this.edges.clear();
   }
 
   display() {
-    for (let vertex of this.vertexs) {
-      vertex.display();
-    }
     for (let edge of this.edges) {
       edge.display();
+    }
+    for (let vertex of this.vertices) {
+      vertex.display();
     }
   }
 }
@@ -286,13 +286,12 @@ class Ant {
   }
 
   display() {
-    let color = 150;
+    fill(207,136,100);
     if (this.has_food) {
-      color = 10;
+      fill(98,171,204);
     }
-    stroke(200);
+    stroke(200,0.5);
     strokeWeight(2);
-    fill(color);
     let position = this.get_position();
     ellipse(position[0], position[1], this.radius, this.radius);
   }
@@ -379,7 +378,7 @@ class Ant {
 
   at_food() {
     // Assuming a vertex is reached
-    return this.scene.food_vertexs.indexOf(this.to_vertex) >= 0;
+    return this.scene.food_vertices.indexOf(this.to_vertex) >= 0;
   }
 }
 
